@@ -11,12 +11,12 @@ import lombok.Setter;
 @AllArgsConstructor
 public class BusLocation {
 
-    private String ordem;
+    private String order;
     private String latitude;
     private String longitude;
-    private String datahora;
-    private String velocidade;
-    private String linha;
-    private String datahoraenvio;
-    private String datahoraservidor;
+    private String dateTime;
+    private String speed;
+    private String line;
+    private String dateTimeShipping;
+    private String dateTimeServer;
 }
