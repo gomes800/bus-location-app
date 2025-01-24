@@ -3,6 +3,8 @@ package com.gomes800.bus_location_backend.services;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -22,6 +24,7 @@ public class BusService {
         this.objectMapper = new ObjectMapper();
     }
 
+    @Cacheable(value = "bus", key = "#line")
     public Mono<List<BusLocation>> getBusPerLine(String line) {
         return webClient.get()
                 .uri("/gps/sppo?dataInicial=AAAA-MM-DD+HH:MM:SS&dataFinal=AAAA-MM-DD+HH:MM:SS")
