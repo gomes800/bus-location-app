@@ -3,7 +3,7 @@ package com.gomes800.bus_location_backend.services;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -22,6 +22,8 @@ public class BusService {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private  List<BusLocation> cachedBusLocations = List.of();
+    private String selectedLine = "371";
 
     public BusService(WebClient.Builder webClientBuilder) {
 
@@ -34,9 +36,8 @@ public class BusService {
                 .build();
         this.objectMapper = new ObjectMapper();
     }
-
-    @Cacheable(value = "bus", key = "#line")
-    public Mono<List<BusLocation>> getBusPerLine(String line) {
+    
+    private Mono<List<BusLocation>> fetchBusLocations(String line) {
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startDate = now.minusSeconds(100);
@@ -76,4 +77,20 @@ public class BusService {
             throw new RuntimeException("Erro ao processar JSON", e);
         }
     }
+
+    @Scheduled(fixedRate = 30000)
+    public void updateBusLocations() {
+        fetchBusLocations(selectedLine)
+                .doOnNext(busLocations -> this.cachedBusLocations = busLocations)
+                .subscribe();
+    }
+
+    public List<BusLocation> getCachedBusLocations() {
+        return cachedBusLocations;
+    }
+
+    public void setSelectedLine(String line) {
+        this.selectedLine = line;
+    }
+
 }
