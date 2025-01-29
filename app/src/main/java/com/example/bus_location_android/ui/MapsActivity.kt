@@ -39,7 +39,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mapFragment.getMapAsync(this)
     }
 
-    override fun OnMapReady(map: GoogleMap) {
+    override fun onMapReady(map: GoogleMap) {
         googleMap = map
 
         val rio = LatLng(-22.9068, -43.1729)

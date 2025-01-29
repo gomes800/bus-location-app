@@ -5,6 +5,6 @@ import retrofit2.Call
 import retrofit2.http.GET
 
 interface BusApiService {
-    @GET("bus")
+    @GET("/bus")
     fun getBusLocations(): Call<List<BusLocation>>
 }
