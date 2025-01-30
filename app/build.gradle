@@ -4,6 +4,15 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+def getMapsApiKey() {
+    def localProperties = new Properties()
+    def localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localProperties.load(new FileInputStream(localPropertiesFile))
+    }
+    return localProperties.getProperty("MAPS_API_KEY", "")
+}
+
 android {
     namespace 'com.example.bus_location_android'
     compileSdk 35
@@ -14,6 +23,10 @@ android {
         targetSdk 35
         versionCode 1
         versionName "1.0"
+
+        def mapsApiKey = getMapsApiKey()
+
+        buildConfigField("String", "MAPS_API_KEY", "\"${mapsApiKey}\"")
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
