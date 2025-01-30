@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">bus-location-android</string>
+    <string name="maps_api_key">AIzaSyDIcAGuNthlF3_cWx4XkTuauCP3Cy_j0Kc</string>
 </resources>
