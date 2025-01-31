@@ -3,6 +3,7 @@ package com.gomes800.bus_location_backend.services;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
+import jakarta.annotation.PostConstruct;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -23,7 +24,7 @@ public class BusService {
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
     private  List<BusLocation> cachedBusLocations = List.of();
-    private String selectedLine = "371";
+    private volatile String selectedLine = "371";
 
     public BusService(WebClient.Builder webClientBuilder) {
 
@@ -36,7 +37,7 @@ public class BusService {
                 .build();
         this.objectMapper = new ObjectMapper();
     }
-    
+
     private Mono<List<BusLocation>> fetchBusLocations(String line) {
 
         LocalDateTime now = LocalDateTime.now();
@@ -72,17 +73,21 @@ public class BusService {
                                 bus.setLongitude(bus.getLongitude().replace(",", "."));
                             })
                             .collect(Collectors.toList());
-                            
+
         } catch (IOException e) {
             throw new RuntimeException("Erro ao processar JSON", e);
         }
     }
 
+    @PostConstruct
+    public void init() {
+        this.cachedBusLocations = fetchBusLocations(selectedLine).block();
+    }
+
+
     @Scheduled(fixedRate = 30000)
     public void updateBusLocations() {
-        fetchBusLocations(selectedLine)
-                .doOnNext(busLocations -> this.cachedBusLocations = busLocations)
-                .subscribe();
+        fetchAndUpdateCache();
     }
 
     public List<BusLocation> getCachedBusLocations() {
@@ -90,7 +95,19 @@ public class BusService {
     }
 
     public void setSelectedLine(String line) {
+        if (this.selectedLine.equals(line)) {
+            return;
+        }
         this.selectedLine = line;
+        this.cachedBusLocations = fetchBusLocations(line).block();
+    }
+
+
+
+    private void fetchAndUpdateCache() {
+        fetchBusLocations(selectedLine)
+                .doOnNext(busLocations -> this.cachedBusLocations = busLocations)
+                .subscribe();
     }
 
 }
