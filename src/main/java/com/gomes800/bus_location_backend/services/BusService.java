@@ -41,7 +41,7 @@ public class BusService {
     private Mono<List<BusLocation>> fetchBusLocations(String line) {
 
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startDate = now.minusSeconds(100);
+        LocalDateTime startDate = now.minusSeconds(30);
         LocalDateTime endDate = now;
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd+HH:mm:ss");
@@ -85,7 +85,7 @@ public class BusService {
     }
 
 
-    @Scheduled(fixedRate = 25000)
+    @Scheduled(fixedRate = 30000)
     public void updateBusLocations() {
         fetchAndUpdateCache();
     }
