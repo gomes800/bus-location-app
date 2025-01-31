@@ -52,7 +52,7 @@ public class BusService {
                 .uri("/gps/sppo?dataInicial={startDate}&dataFinal={endDate}", startDateStr, endDateStr)
                 .retrieve()
                 .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(30))
+                .timeout(Duration.ofSeconds(40))
                 .map(data -> filterByLine(data, line));
     }
 
@@ -85,7 +85,7 @@ public class BusService {
     }
 
 
-    @Scheduled(fixedRate = 30000)
+    @Scheduled(fixedRate = 25000)
     public void updateBusLocations() {
         fetchAndUpdateCache();
     }
