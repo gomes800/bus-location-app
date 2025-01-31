@@ -3,7 +3,6 @@ package com.gomes800.bus_location_backend.services;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
-import jakarta.annotation.PostConstruct;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
@@ -23,8 +22,8 @@ public class BusService {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
-    private  List<BusLocation> cachedBusLocations = List.of();
-    private volatile String selectedLine = "371";
+    private List<BusLocation> cachedBusLocations = List.of();
+    private String selectedLine = "";
 
     public BusService(WebClient.Builder webClientBuilder) {
 
@@ -79,11 +78,13 @@ public class BusService {
         }
     }
 
-    @PostConstruct
-    public void init() {
-        this.cachedBusLocations = fetchBusLocations(selectedLine).block();
+    private void fetchAndUpdateCache() {
+        if (selectedLine != null) {
+            fetchBusLocations(selectedLine)
+                    .doOnNext(busLocations -> this.cachedBusLocations = busLocations)
+                    .subscribe();
+        }
     }
-
 
     @Scheduled(fixedRate = 30000)
     public void updateBusLocations() {
@@ -91,23 +92,20 @@ public class BusService {
     }
 
     public List<BusLocation> getCachedBusLocations() {
+        if (Objects.equals(selectedLine, "")) {
+            throw new IllegalStateException("Nenhuma linha foi selecionada ainda.");
+        }
         return cachedBusLocations;
     }
 
-    public void setSelectedLine(String line) {
+    public List<BusLocation> setSelectedLine(String line) {
         if (this.selectedLine.equals(line)) {
-            return;
+            return null;
         }
         this.selectedLine = line;
         this.cachedBusLocations = fetchBusLocations(line).block();
+        return cachedBusLocations;
     }
 
-
-
-    private void fetchAndUpdateCache() {
-        fetchBusLocations(selectedLine)
-                .doOnNext(busLocations -> this.cachedBusLocations = busLocations)
-                .subscribe();
-    }
 
 }

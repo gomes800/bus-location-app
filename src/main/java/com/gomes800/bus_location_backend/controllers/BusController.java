@@ -23,9 +23,8 @@ public class BusController {
     }
 
     @PostMapping("select-line")
-    public String selectLine(@RequestParam String line) {
-        busService.setSelectedLine(line);
-        return "Linha selecionada: " + line;
+    public List<BusLocation> selectLine(@RequestParam String line) {
+        return busService.setSelectedLine(line);
     }
 
 }
