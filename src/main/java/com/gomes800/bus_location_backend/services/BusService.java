@@ -3,10 +3,12 @@ package com.gomes800.bus_location_backend.services;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
@@ -92,8 +94,8 @@ public class BusService {
     }
 
     public List<BusLocation> getCachedBusLocations() {
-        if (Objects.equals(selectedLine, "")) {
-            throw new IllegalStateException("Nenhuma linha foi selecionada ainda.");
+        if (selectedLine == null || selectedLine.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nenhuma linha foi selecionada!");
         }
         return cachedBusLocations;
     }
