@@ -25,14 +25,23 @@ import retrofit2.Response
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var googleMap: GoogleMap
-    private val updateInterval = 30000L
     private var pollingJob: Job? = null
-
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
+
+    private lateinit var selectedLine: String
+    private val updateInterval = 30000L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
+
+        selectedLine = intent.getStringExtra("SELECTED_LINE") ?: ""
+
+        if (selectedLine.isEmpty()) {
+            Toast.makeText(this, "Nenhuma linha foi selecionada!", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
 
         val mapFragment = supportFragmentManager
             .findFragmentById(R.id.map) as SupportMapFragment
@@ -63,12 +72,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun fetchBusLocations() {
-        RetrofitClient.instance.getBusLocations().enqueue(object : Callback<List<BusLocation>> {
+        RetrofitClient.instance.selectBusLine(selectedLine).enqueue(object : Callback<List<BusLocation>> {
             override fun onResponse(call: Call<List<BusLocation>>, response: Response<List<BusLocation>>) {
                 if (response.isSuccessful) {
-                    response.body()?.let { updateMap(it) }
+                    val busList = response.body()
+                    if (busList.isNullOrEmpty()) {
+                        Toast.makeText(this@MapsActivity, "Nenhuma linha foi selecionada. Escolha uma linha primeiro!", Toast.LENGTH_LONG).show()
+                        return
+                    }
+                    updateMap(busList)
                 } else {
-                    Toast.makeText(this@MapsActivity, "Erro ao carregar os dados", Toast.LENGTH_LONG).show()
+                    val errorMessage = response.errorBody()?.string() ?: "Erro desconhecido"
+                    Toast.makeText(this@MapsActivity, "Erro: $errorMessage", Toast.LENGTH_LONG).show()
                 }
             }
 
