@@ -30,7 +30,7 @@ public class BusService {
     public BusService(WebClient.Builder webClientBuilder) {
 
         ExchangeStrategies strategies = ExchangeStrategies.builder()
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(100 * 1024 * 1024))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(256 * 1024 * 1024))
                 .build();
         this.webClient = webClientBuilder
                 .baseUrl("https://dados.mobilidade.rio")
