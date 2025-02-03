@@ -37,14 +37,21 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         selectedLine = intent.getStringExtra("SELECTED_LINE") ?: ""
 
-        if (selectedLine.isEmpty()) {
-            Toast.makeText(this, "Nenhuma linha foi selecionada!", Toast.LENGTH_LONG).show()
+        if (selectedLine.isBlank()) {
+            Toast.makeText(this, "Erro: Nenhuma linha foi selecionada!", Toast.LENGTH_LONG).show()
             finish()
             return
         }
 
         val mapFragment = supportFragmentManager
-            .findFragmentById(R.id.map) as SupportMapFragment
+            .findFragmentById(R.id.map) as? SupportMapFragment
+
+        if (mapFragment == null) {
+            Toast.makeText(this, "Erro ao carregar o mapa!", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
         mapFragment.getMapAsync(this)
     }
 
@@ -72,39 +79,55 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun fetchBusLocations() {
+        if (selectedLine.isBlank()) {
+            Toast.makeText(this, "Erro: Nenhuma linha selecionada.", Toast.LENGTH_LONG).show()
+            return
+        }
+
         RetrofitClient.instance.selectBusLine(selectedLine).enqueue(object : Callback<List<BusLocation>> {
             override fun onResponse(call: Call<List<BusLocation>>, response: Response<List<BusLocation>>) {
                 if (response.isSuccessful) {
                     val busList = response.body()
                     if (busList.isNullOrEmpty()) {
-                        Toast.makeText(this@MapsActivity, "Nenhuma linha foi selecionada. Escolha uma linha primeiro!", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@MapsActivity, "Nenhum ônibus disponível para esta linha.", Toast.LENGTH_LONG).show()
+                        googleMap.clear()
                         return
                     }
                     updateMap(busList)
                 } else {
                     val errorMessage = response.errorBody()?.string() ?: "Erro desconhecido"
-                    Toast.makeText(this@MapsActivity, "Erro: $errorMessage", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MapsActivity, "Erro na API: $errorMessage", Toast.LENGTH_LONG).show()
                 }
             }
 
             override fun onFailure(call: Call<List<BusLocation>>, t: Throwable) {
-                Toast.makeText(this@MapsActivity, "Erro ao carregar os dados: ${t.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MapsActivity, "Falha na conexão: ${t.message}", Toast.LENGTH_LONG).show()
             }
         })
     }
 
+
     private fun updateMap(busLocations: List<BusLocation>) {
         googleMap.clear()
         busLocations.forEach { bus ->
-            val position = LatLng(
-                bus.latitude.replace(",", ".").toDouble(),
-                bus.longitude.replace(",", ".").toDouble()
-            )
-            googleMap.addMarker(
-                MarkerOptions()
-                    .position(position)
-                    .title("Onibus ${bus.line}")
-            )
+            try {
+                val lat = bus.latitude.replace(",", ".").toDoubleOrNull()
+                val lng = bus.longitude.replace(",", ".").toDoubleOrNull()
+
+                if (lat == null || lng == null) {
+                    Toast.makeText(this, "Erro: Coordenadas inválidas para o ônibus ${bus.line}", Toast.LENGTH_SHORT).show()
+                    return@forEach
+                }
+
+                val position = LatLng(lat, lng)
+                googleMap.addMarker(
+                    MarkerOptions()
+                        .position(position)
+                        .title("Ônibus ${bus.line}")
+                )
+            } catch (e: Exception) {
+                Toast.makeText(this, "Erro ao processar localização do ônibus.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 }

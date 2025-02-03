@@ -3,6 +3,7 @@ package com.example.bus_location_android.ui
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Space
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -22,18 +23,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import androidx.core.provider.FontsContractCompat.Columns
 
-class LineSelectionActivity : ComponentActivity(){
+class LineSelectionActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent{
+        setContent {
             LineSelectionScreen { selectedLine ->
-                val intent = Intent(this, MapsActivity::class.java).apply {
-                    putExtra("SELECTED_LINE", selectedLine)
+                if (selectedLine.isNotEmpty()) {
+                    val intent = Intent(this, MapsActivity::class.java).apply {
+                        putExtra("SELECTED_LINE", selectedLine)
+                    }
+                    startActivity(intent)
+                    finish()
+                } else {
+                    Toast.makeText(this, "Por favor, digite um número de linha!", Toast.LENGTH_SHORT).show()
                 }
-                startActivity(intent)
-                finish()
             }
         }
     }
