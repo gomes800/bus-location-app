@@ -31,6 +31,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var selectedLine: String
     private val updateInterval = 30000L
 
+    private var isLineSelected = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
@@ -71,11 +73,44 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun startPolling() {
         pollingJob = coroutineScope.launch {
+            if (!isLineSelected) {
+                selectBusLine()
+                isLineSelected = true
+            }
+
             while (isActive) {
                 fetchBusLocations()
                 delay(updateInterval)
             }
         }
+    }
+
+    private fun selectBusLine() {
+        if (selectedLine.isBlank()) {
+            Toast.makeText(this, "Erro: Nenhuma linha selecionada.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        RetrofitClient.instance.selectBusLine(selectedLine).enqueue(object : Callback<List<BusLocation>> {
+            override fun onResponse(call: Call<List<BusLocation>>, response: Response<List<BusLocation>>) {
+                if (response.isSuccessful) {
+                    val busList = response.body()
+                    if (busList.isNullOrEmpty()) {
+                        Toast.makeText(this@MapsActivity, "Nenhum ônibus disponível para esta linha.", Toast.LENGTH_LONG).show()
+                        googleMap.clear()
+                        return
+                    }
+                    updateMap(busList)
+                } else {
+                    val errorMessage = response.errorBody()?.string() ?: "Erro desconhecido"
+                    Toast.makeText(this@MapsActivity, "Erro na API: $errorMessage", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onFailure(call: Call<List<BusLocation>>, t: Throwable) {
+                Toast.makeText(this@MapsActivity, "Falha na conexão: ${t.message}", Toast.LENGTH_LONG).show()
+            }
+        })
     }
 
     private fun fetchBusLocations() {
@@ -84,7 +119,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             return
         }
 
-        RetrofitClient.instance.selectBusLine(selectedLine).enqueue(object : Callback<List<BusLocation>> {
+        RetrofitClient.instance.getBusLocations().enqueue(object : Callback<List<BusLocation>> {
             override fun onResponse(call: Call<List<BusLocation>>, response: Response<List<BusLocation>>) {
                 if (response.isSuccessful) {
                     val busList = response.body()

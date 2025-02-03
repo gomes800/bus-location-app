@@ -10,6 +10,6 @@ interface BusApiService {
     @GET("/bus")
     fun getBusLocations(): Call<List<BusLocation>>
 
-    @POST("bus/select-line")
+    @POST("/bus/select-line")
     fun selectBusLine(@Query("line") line: String): Call<List<BusLocation>>
 }
