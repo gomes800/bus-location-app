@@ -1,5 +1,7 @@
 package com.gomes800.bus_location_backend.services;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
@@ -9,14 +11,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,90 +32,125 @@ public class BusService {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final Map<String, List<BusLocation>> cache = new ConcurrentHashMap<>();
+    private final Scheduler scheduler = Schedulers.boundedElastic();
     private List<BusLocation> cachedBusLocations = List.of();
     private String selectedLine = "";
 
     public BusService(WebClient.Builder webClientBuilder) {
-
-        ExchangeStrategies strategies = ExchangeStrategies.builder()
-                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(256 * 1024 * 1024))
-                .build();
         this.webClient = webClientBuilder
                 .baseUrl("https://dados.mobilidade.rio")
-                .exchangeStrategies(strategies)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(100 * 1024 * 1024))
                 .build();
+
         this.objectMapper = new ObjectMapper();
     }
 
-    private Mono<List<BusLocation>> fetchBusLocations(String line) {
-
+    private Mono<String> getDataFromApi() {
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startDate = now.minusSeconds(30);
-        LocalDateTime endDate = now;
-
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd+HH:mm:ss");
-        String startDateStr = startDate.format(formatter);
-        String endDateStr = endDate.format(formatter);
 
         return webClient.get()
-                .uri("/gps/sppo?dataInicial={startDate}&dataFinal={endDate}", startDateStr, endDateStr)
+                .uri("/gps/sppo?dataInicial={start}&dataFinal={end}",
+                        now.minusSeconds(10).format(formatter),
+                        now.format(formatter))
                 .retrieve()
                 .bodyToMono(String.class)
-                .timeout(Duration.ofSeconds(40))
-                .map(data -> filterByLine(data, line));
+                .doOnNext(json -> System.out.println("JSON recebido: " + json))
+                .timeout(Duration.ofSeconds(50));
     }
 
-    private List<BusLocation> filterByLine(String jsonData, String line) {
-        try {
-            List<BusLocation> busLocationList = objectMapper.readValue(jsonData, new TypeReference<List<BusLocation>>() {});
+    private Mono<List<BusLocation>> fetchBusLocations(String line) {
+        return getDataFromApi()
+                .flatMapMany(this::parseJsonStream)
+                .filter(bus -> line.equals(bus.getLine()))
+                .collectList()
+                .map(this::processLatestPositions)
+                .onErrorResume(e -> {
+                    System.err.println("Erro ao buscar localizações de ônibus: " + e.getMessage());
+                    return Mono.empty();
+                })
+                .cache(Duration.ofSeconds(30))
+                .subscribeOn(scheduler);
+    }
 
-            return busLocationList.stream()
-                    .filter(bus -> line.equals(bus.getLine()))
-                    .collect(Collectors.groupingBy((BusLocation::getOrder)))
-                    .values() .stream()
-                    .map(group -> group.stream()
-                            .max((o1, o2) -> Long.compare(Long.parseLong(o1.getDateTime()), Long.parseLong(o2.getDateTime())))
-                                    .orElse(null))
-                            .filter(Objects::nonNull)
-                            .peek(bus -> {
-                                bus.setLatitude(bus.getLatitude().replace(",", "."));
-                                bus.setLongitude(bus.getLongitude().replace(",", "."));
-                            })
-                            .collect(Collectors.toList());
+    private Flux<BusLocation> parseJsonStream(String jsonData) {
+        System.out.println("Iniciando parsing do JSON...");
 
-        } catch (IOException e) {
-            throw new RuntimeException("Erro ao processar JSON", e);
+        return Flux.create(sink -> {
+            try (JsonParser parser = objectMapper.getFactory().createParser(jsonData)) {
+                if (parser.nextToken() != JsonToken.START_ARRAY) {
+                    sink.error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Formato de JSON inválido"));
+                    return;
+                }
+
+                while (parser.nextToken() == JsonToken.START_OBJECT) {
+                    BusLocation bus = objectMapper.readValue(parser, BusLocation.class);
+                    normalizeCoordinates(bus);
+                    sink.next(bus);
+                }
+                sink.complete();
+            } catch (IOException e) {
+                sink.error(new RuntimeException("Erro ao processar JSON", e));
+            }
+        });
+    }
+
+    private void normalizeCoordinates(BusLocation bus) {
+        bus.setLatitude(bus.getLatitude().replace(',', '.'));
+        bus.setLongitude(bus.getLongitude().replace(',', '.'));
+    }
+
+    private List<BusLocation> processLatestPositions(List<BusLocation> buses) {
+        return buses.stream()
+                .collect(Collectors.toMap(
+                        BusLocation::getOrder,
+                        Function.identity(),
+                        (existing, replacement) ->
+                                Long.parseLong(existing.getDateTime()) > Long.parseLong(replacement.getDateTime())
+                                        ? existing : replacement
+                ))
+                .values()
+                .stream()
+                .collect(Collectors.toList());
+    }
+
+    @Scheduled(fixedRate = 30_000)
+    public void updateAllLinesCache() {
+    }
+
+    public Mono<List<BusLocation>> getBusLocations(String line, boolean forceRefresh) {
+        if(forceRefresh) {
+            cache.remove(line);
         }
+        return Mono.justOrEmpty(cache.get(line))
+                .switchIfEmpty(fetchBusLocations(line)
+                        .doOnNext(list -> cache.put(line, list))
+                );
     }
 
-    private void fetchAndUpdateCache() {
-        if (selectedLine != null) {
-            fetchBusLocations(selectedLine)
-                    .doOnNext(busLocations -> this.cachedBusLocations = busLocations)
-                    .subscribe();
-        }
+    public Mono<List<String>> getAvailableLines() {
+        return getDataFromApi()
+                .flatMapMany(this::parseJsonStream)
+                .map(BusLocation::getLine)
+                .distinct()
+                .collectList();
     }
-
-    @Scheduled(fixedRate = 30000)
-    public void updateBusLocations() {
-        fetchAndUpdateCache();
-    }
-
-    public List<BusLocation> getCachedBusLocations() {
-        if (selectedLine == null || selectedLine.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nenhuma linha foi selecionada!");
-        }
-        return cachedBusLocations;
-    }
-
-    public List<BusLocation> setSelectedLine(String line) {
-        if (this.selectedLine.equals(line)) {
-            return null;
-        }
-        this.selectedLine = line;
-        this.cachedBusLocations = fetchBusLocations(line).block();
-        return cachedBusLocations;
-    }
-
-
 }
+
+
+//    public List<BusLocation> getCachedBusLocations() {
+//        if (selectedLine == null || selectedLine.isEmpty()) {
+//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nenhuma linha foi selecionada!");
+//        }
+//        return cachedBusLocations;
+//    }
+//
+//    public List<BusLocation> setSelectedLine(String line) {
+//        if (this.selectedLine.equals(line)) {
+//            return null;
+//        }
+//        this.selectedLine = line;
+//        this.cachedBusLocations = fetchBusLocations(line).block();
+//        return cachedBusLocations;
+//    }
