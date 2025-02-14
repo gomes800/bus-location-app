@@ -2,13 +2,11 @@ package com.gomes800.bus_location_backend.services;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gomes800.bus_location_backend.domain.BusLocation;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
@@ -22,7 +20,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -34,8 +31,6 @@ public class BusService {
     private final ObjectMapper objectMapper;
     private final Map<String, List<BusLocation>> cache = new ConcurrentHashMap<>();
     private final Scheduler scheduler = Schedulers.boundedElastic();
-    private List<BusLocation> cachedBusLocations = List.of();
-    private String selectedLine = "";
 
     public BusService(WebClient.Builder webClientBuilder) {
         this.webClient = webClientBuilder
@@ -56,7 +51,7 @@ public class BusService {
                         now.format(formatter))
                 .retrieve()
                 .bodyToMono(String.class)
-                .doOnNext(json -> System.out.println("JSON recebido: " + json))
+                .doOnNext(json -> System.out.println("JSON recebido"))
                 .timeout(Duration.ofSeconds(50));
     }
 
@@ -75,7 +70,6 @@ public class BusService {
     }
 
     private Flux<BusLocation> parseJsonStream(String jsonData) {
-        System.out.println("Iniciando parsing do JSON...");
 
         return Flux.create(sink -> {
             try (JsonParser parser = objectMapper.getFactory().createParser(jsonData)) {
@@ -137,20 +131,3 @@ public class BusService {
                 .collectList();
     }
 }
-
-
-//    public List<BusLocation> getCachedBusLocations() {
-//        if (selectedLine == null || selectedLine.isEmpty()) {
-//            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nenhuma linha foi selecionada!");
-//        }
-//        return cachedBusLocations;
-//    }
-//
-//    public List<BusLocation> setSelectedLine(String line) {
-//        if (this.selectedLine.equals(line)) {
-//            return null;
-//        }
-//        this.selectedLine = line;
-//        this.cachedBusLocations = fetchBusLocations(line).block();
-//        return cachedBusLocations;
-//    }
