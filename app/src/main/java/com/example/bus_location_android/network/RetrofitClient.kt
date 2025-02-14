@@ -1,6 +1,6 @@
 package com.example.bus_location_android.network
 
-import com.example.bus_location_android.services.BusApiService
+import BusApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -10,9 +10,9 @@ object RetrofitClient {
     private const val BASE_URL = "http://192.168.1.158:8080"
 
     val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(40, TimeUnit.SECONDS) // tempo de conexão
-        .readTimeout(40, TimeUnit.SECONDS)    // tempo de leitura
-        .writeTimeout(40, TimeUnit.SECONDS)   // tempo de escrita
+        .connectTimeout(40, TimeUnit.SECONDS)
+        .readTimeout(40, TimeUnit.SECONDS)
+        .writeTimeout(40, TimeUnit.SECONDS)
         .build()
 
     val instance: BusApiService by lazy {
